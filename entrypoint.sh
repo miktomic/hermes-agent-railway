@@ -256,6 +256,25 @@ export HERMES_WEBUI_STATE_DIR="${HERMES_HOME}/.hermes/webui"
 # Point hermes-webui at our Hermes Agent install so agent features work
 export HERMES_WEBUI_AGENT_DIR="/opt/hermes"
 
+# Optional: auto-start the official Hermes CLI dashboard behind
+# /hermes-dashboard via the built-in proxy. Default off because this surface
+# bypasses the WebUI admin password and exposes a powerful operator UI.
+if [ "${START_DASHBOARD:-false}" = "true" ]; then
+  DASHBOARD_LOG="${HERMES_HOME}/logs/dashboard.log"
+  DASHBOARD_PID_FILE="${HERMES_HOME}/dashboard.pid"
+  echo "Starting Hermes dashboard in background..."
+  printf '\n--- Starting Hermes dashboard on %s:%s %s ---\n' "${HERMES_DASHBOARD_HOST}" "${HERMES_DASHBOARD_PORT}" "$(date)" >> "${DASHBOARD_LOG}"
+  if [ "$(id -u)" = "0" ]; then
+    setsid gosu hermes /opt/hermes/.venv/bin/hermes dashboard --no-open \
+      >> "${DASHBOARD_LOG}" 2>&1 < /dev/null &
+  else
+    setsid /opt/hermes/.venv/bin/hermes dashboard --no-open \
+      >> "${DASHBOARD_LOG}" 2>&1 < /dev/null &
+  fi
+  echo $! > "${DASHBOARD_PID_FILE}"
+  echo "Dashboard PID: $(cat "${DASHBOARD_PID_FILE}") (logs at ${DASHBOARD_LOG})"
+fi
+
 # Optional: auto-start the messaging gateway daemon (Telegram/Discord/Slack/email).
 # Default off — users typically configure channel tokens via the WebUI Settings
 # panel first, then redeploy with START_GATEWAY=true.

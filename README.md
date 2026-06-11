@@ -54,6 +54,7 @@ Set these variables:
 | `ADMIN_PASSWORD` | `${{ secret(32) }}` | Recommended | Password for Hermes WebUI (set explicitly in production). If unset, the entrypoint generates one, persists it to `/data/admin.password`, and prints it once to the deploy logs. |
 | `SEARXNG_URL` | `http://${{searxng-railway.RAILWAY_PRIVATE_DOMAIN}}:${{searxng-railway.PORT}}` | Recommended | Private URL for the companion SearXNG service. |
 | `START_GATEWAY` | `false` | Optional | Set to `true` to also run `hermes gateway run --replace` as a background daemon (messaging bridges; aligns with **`hermes gateway start`** in Hermes tutorials for Kanban/dispatcher workflows). Configure channel tokens in WebUI Settings first, then redeploy with this flag. |
+| `START_DASHBOARD` | `false` | Optional | Set to `true` to auto-start `hermes dashboard --no-open` in the background on container boot, making the official Hermes dashboard available at `/hermes-dashboard/` without opening `/tui` first. **Security warning:** this dashboard bypasses the WebUI `ADMIN_PASSWORD`; only enable it if you are comfortable exposing that operator surface on your public Railway URL. |
 | `HERMES_WEBUI_HOST` | `127.0.0.1` | Optional | Loopback bind address for Hermes WebUI — must reach the proxy target; Railway operators normally leave default. |
 | `HERMES_WEBUI_PORT` | `9120` | Optional | Internal WebUI TCP port. Default frees **9119** for upstream **`hermes dashboard`**, often run manually from **`/tui`**; change only when both processes need different ports on your deployment. |
 | `HERMES_DASHBOARD_HOST` | `127.0.0.1` | Optional | [**`hermes dashboard`**](https://hermes-agent.nousresearch.com/docs/user-guide/features/web-dashboard) bind address (also **`--host`** in the CLI); default stays on container loopback. Railway does **not** expose a separate public port — use **`HERMES_DASHBOARD_MOUNT_PATH`** on the **`$PORT`** surface instead (`0.0.0.0` alone doesn’t magically map to HTTPS). Also described in [**environment variables**](https://hermes-agent.nousresearch.com/docs/reference/environment-variables). |
@@ -214,7 +215,7 @@ The wrapper sets **`X-Forwarded-Prefix: /hermes-dashboard`** when forwarding to 
 
 **Important:** **`0.0.0.0` binding does not give you another published Railway listener** inside this single-service HTTP model — the **`$PORT`** app plus the **`/hermes-dashboard`** proxy is how you expose the CLI dashboard over HTTPS.
 
-**Safety note:** **`/hermes-dashboard` bypasses Hermes WebUI `ADMIN_PASSWORD`.** Whenever **`hermes dashboard`** is listening, anyone who reaches your Railway URL gets Hermes's powerful CLI dashboard ([upstream exposes secrets](https://hermes-agent.nousresearch.com/docs/user-guide/features/web-dashboard)). Prefer stopping **`hermes dashboard`** when you do not need it.
+**Safety note:** **`/hermes-dashboard` bypasses Hermes WebUI `ADMIN_PASSWORD`.** Whenever **`hermes dashboard`** is listening, anyone who reaches your Railway URL gets Hermes's powerful CLI dashboard ([upstream exposes secrets](https://hermes-agent.nousresearch.com/docs/user-guide/features/web-dashboard)). Prefer stopping **`hermes dashboard`** when you do not need it. If you still want persistent access, set **`START_DASHBOARD=true`** and redeploy.
 
 ## Notes
 
