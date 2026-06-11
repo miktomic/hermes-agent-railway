@@ -61,6 +61,19 @@ def _validated_mount_prefix(raw: str) -> str:
     return forwarded
 
 
+def _strip_mount_prefix(path: str) -> str:
+    """Normalize a public mounted path to the upstream dashboard root path."""
+    if not path:
+        return "/"
+    if path == DASHBOARD_MOUNT_PREFIX:
+        return "/"
+    prefixed = DASHBOARD_MOUNT_PREFIX + "/"
+    if path.startswith(prefixed):
+        stripped = path[len(DASHBOARD_MOUNT_PREFIX) :]
+        return stripped or "/"
+    return path
+
+
 try:
     DASHBOARD_MOUNT_PREFIX = _validated_mount_prefix(
         os.environ.get("HERMES_DASHBOARD_MOUNT_PATH", "/hermes-dashboard"),
@@ -106,12 +119,7 @@ async def _ensure_dashboard_client() -> httpx.AsyncClient:
 
 
 async def dashboard_http_proxy(request: Request) -> Response:
-    # When this app is mounted under /hermes-dashboard, request.url.path is the
-    # public URL path including the mount prefix. The upstream Hermes dashboard
-    # listens at root on loopback and expects /assets/... rather than
-    # /hermes-dashboard/assets/.... Use the mount-stripped ASGI path from the
-    # scope so JS/CSS/favicon requests don't get mis-routed to the SPA index.
-    path = request.scope.get("path") or "/"
+    path = _strip_mount_prefix(request.url.path or request.scope.get("path") or "/")
     if request.url.query:
         path = f"{path}?{request.url.query}"
 
@@ -156,6 +164,7 @@ async def dashboard_http_proxy(request: Request) -> Response:
 async def dashboard_ws_proxy(websocket: WebSocket) -> None:
     raw_path = websocket.path_params.get("path", "")
     path = "/" + raw_path if not raw_path.startswith("/") else raw_path
+    path = _strip_mount_prefix(path)
     qs = websocket.scope.get("query_string", b"").decode()
     if qs:
         path = f"{path}?{qs}"
