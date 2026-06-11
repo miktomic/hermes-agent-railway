@@ -106,7 +106,12 @@ async def _ensure_dashboard_client() -> httpx.AsyncClient:
 
 
 async def dashboard_http_proxy(request: Request) -> Response:
-    path = request.url.path or "/"
+    # When this app is mounted under /hermes-dashboard, request.url.path is the
+    # public URL path including the mount prefix. The upstream Hermes dashboard
+    # listens at root on loopback and expects /assets/... rather than
+    # /hermes-dashboard/assets/.... Use the mount-stripped ASGI path from the
+    # scope so JS/CSS/favicon requests don't get mis-routed to the SPA index.
+    path = request.scope.get("path") or "/"
     if request.url.query:
         path = f"{path}?{request.url.query}"
 
