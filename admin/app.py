@@ -6,7 +6,7 @@ Adds one new surface — `/tui` — that exposes an in-browser xterm with two mo
   - Free-form shell: `/bin/bash -i` for users without SSH access who need to
     run other `hermes` CLI commands or peek at `/data` (`/tui/ws/shell`).
 
-Hermes CLI ``hermes dashboard`` is reverse-proxied under ``/hermes-dashboard`` by default
+Hermes CLI ``hermes dashboard`` is reverse-proxied under ``/dashboard`` by default
 (override with ``HERMES_DASHBOARD_MOUNT_PATH`` — see ``admin/dashboard_proxy.py``): loopback port
 9119 (``HERMES_DASHBOARD_HOST`` / ``HERMES_DASHBOARD_PORT``) with ``X-Forwarded-Prefix`` so
 upstream rewrites SPA asset URLs correctly.
@@ -18,7 +18,7 @@ including WebSockets and SSE chat streams.
 This wrapper does NOT enforce separate auth on traffic proxied to hermes-webui; that app
 handles its password gate via session cookies / `/login`.
 
-The **`/tui`** page probes hermes-webui's API cookies before responding; **`/hermes-dashboard`** runs
+The **`/tui`** page probes hermes-webui's API cookies before responding; **`/dashboard`** runs
 Hermes upstream's CLI dashboard and does **not** use **`ADMIN_PASSWORD`**. Whenever **`hermes dashboard`** is
 listening it can expose **`.env`** — minimize uptime on public Railway URLs unless you acknowledge that risk (see upstream [**Web Dashboard**](https://hermes-agent.nousresearch.com/docs/user-guide/features/web-dashboard) docs).
 """

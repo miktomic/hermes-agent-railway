@@ -3,7 +3,7 @@
 Target host/port come from ``HERMES_WEBUI_HOST`` / ``HERMES_WEBUI_PORT``
 (default ``127.0.0.1:9120``). The upstream ``hermes dashboard`` CLI usually listens on
 **9119** loopback — start it manually (often from ``/tui``). ``admin/dashboard_proxy`` exposes
-that UI under ``/hermes-dashboard`` with ``X-Forwarded-Prefix`` so the SPA resolves assets
+that UI under ``/dashboard`` with ``X-Forwarded-Prefix`` so the SPA resolves assets
 behind Railway's single public ``PORT`` without binding dashboard to ``0.0.0.0``.
 
 hermes-webui owns auth, session cookies, SSE chat streams, and almost the entire
@@ -32,6 +32,8 @@ import yaml
 from starlette.requests import Request
 from starlette.responses import StreamingResponse, Response
 from starlette.websockets import WebSocket, WebSocketDisconnect
+
+from .runtime_updates import UpdateError, durable_update
 
 
 def _webui_listen_port(raw: str | None, default: int = 9120) -> int:
@@ -202,6 +204,21 @@ async def _ensure_client() -> httpx.AsyncClient:
     return _client
 
 
+async def _request_authenticated(request: Request) -> bool:
+    cookie = request.headers.get("cookie", "")
+    if not cookie:
+        return False
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            r = await client.get(
+                f"{WEBUI_BASE_URL}/api/onboarding/status",
+                headers={"cookie": cookie, "host": f"{WEBUI_HOST}:{WEBUI_PORT}"},
+            )
+        return r.status_code == 200
+    except (httpx.ConnectError, httpx.ReadTimeout):
+        return False
+
+
 async def http_proxy(request: Request) -> Response:
     raw_path = request.path_params.get("path", "")
     path = "/" + raw_path if not raw_path.startswith("/") else raw_path
@@ -213,6 +230,34 @@ async def http_proxy(request: Request) -> Response:
     upstream_headers = _filter_request_headers(request.headers)
 
     body = await request.body()
+
+    if request.method == "POST" and bare_path in {"/api/updates/apply", "/api/updates/force"}:
+        if not await _request_authenticated(request):
+            return Response("Unauthorized", status_code=401, media_type="text/plain")
+        try:
+            payload = json.loads(body) if body else {}
+        except json.JSONDecodeError:
+            return Response(
+                json.dumps({"ok": False, "message": "Invalid JSON body"}),
+                status_code=400,
+                media_type="application/json",
+            )
+        target = payload.get("target") if isinstance(payload, dict) else None
+        if target not in {"webui", "agent"}:
+            return Response(
+                json.dumps({"ok": False, "message": 'target must be "webui" or "agent"'}),
+                status_code=400,
+                media_type="application/json",
+            )
+        try:
+            result = durable_update(str(target), force=(bare_path == "/api/updates/force"))
+            return Response(json.dumps(result), status_code=200, media_type="application/json")
+        except UpdateError as exc:
+            return Response(
+                json.dumps({"ok": False, "message": str(exc)}),
+                status_code=200,
+                media_type="application/json",
+            )
 
     # Workaround for upstream hermes-webui: new sessions are persisted with
     # model_provider=null even when catalog.active_provider is set. Inject

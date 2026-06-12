@@ -76,10 +76,10 @@ def _strip_mount_prefix(path: str) -> str:
 
 try:
     DASHBOARD_MOUNT_PREFIX = _validated_mount_prefix(
-        os.environ.get("HERMES_DASHBOARD_MOUNT_PATH", "/hermes-dashboard"),
+        os.environ.get("HERMES_DASHBOARD_MOUNT_PATH", "/dashboard"),
     )
 except ValueError:
-    DASHBOARD_MOUNT_PREFIX = "/hermes-dashboard"
+    DASHBOARD_MOUNT_PREFIX = "/dashboard"
 
 DASHBOARD_HOST = (os.environ.get("HERMES_DASHBOARD_HOST") or "127.0.0.1").strip() or "127.0.0.1"
 DASHBOARD_PORT = _dash_listen_port(os.environ.get("HERMES_DASHBOARD_PORT"))

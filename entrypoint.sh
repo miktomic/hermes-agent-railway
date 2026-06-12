@@ -223,6 +223,11 @@ if [ -d "/opt/hermes-railway/skills" ]; then
   done
 fi
 
+# If the user previously updated Hermes/WebUI from inside the app, restore those
+# exact runtime refs before serving traffic. Railway redeploys start from the
+# Dockerfile pins again, so without this reconcile the in-app update is lost.
+python3 -m admin.runtime_updates boot-reconcile
+
 if [ -z "${ADMIN_PASSWORD:-}" ]; then
   if [ -f "${ADMIN_PASSWORD_FILE}" ]; then
     ADMIN_PASSWORD="$(tr -d '\n' < "${ADMIN_PASSWORD_FILE}")"
@@ -249,15 +254,16 @@ export HERMES_WEBUI_PASSWORD="${ADMIN_PASSWORD}"
 export HERMES_WEBUI_HOST="${HERMES_WEBUI_HOST:-127.0.0.1}"
 export HERMES_WEBUI_PORT="${HERMES_WEBUI_PORT:-9120}"
 # Upstream Hermes CLI: `hermes dashboard` reads these defaults (Docker/docs also use them).
-# Keep loopback in Railway builds — exposure is via Uvicorn on $PORT plus /hermes-dashboard proxy.
+# Keep loopback in Railway builds — exposure is via Uvicorn on $PORT plus /dashboard proxy.
 export HERMES_DASHBOARD_HOST="${HERMES_DASHBOARD_HOST:-127.0.0.1}"
 export HERMES_DASHBOARD_PORT="${HERMES_DASHBOARD_PORT:-9119}"
+export HERMES_DASHBOARD_MOUNT_PATH="${HERMES_DASHBOARD_MOUNT_PATH:-/dashboard}"
 export HERMES_WEBUI_STATE_DIR="${HERMES_HOME}/.hermes/webui"
 # Point hermes-webui at our Hermes Agent install so agent features work
 export HERMES_WEBUI_AGENT_DIR="/opt/hermes"
 
 # Optional: auto-start the official Hermes CLI dashboard behind
-# /hermes-dashboard via the built-in proxy. Default off because this surface
+# /dashboard via the built-in proxy. Default off because this surface
 # bypasses the WebUI admin password and exposes a powerful operator UI.
 if [ "${START_DASHBOARD:-false}" = "true" ]; then
   DASHBOARD_LOG="${HERMES_HOME}/logs/dashboard.log"
@@ -266,9 +272,11 @@ if [ "${START_DASHBOARD:-false}" = "true" ]; then
   printf '\n--- Starting Hermes dashboard on %s:%s %s ---\n' "${HERMES_DASHBOARD_HOST}" "${HERMES_DASHBOARD_PORT}" "$(date)" >> "${DASHBOARD_LOG}"
   if [ "$(id -u)" = "0" ]; then
     setsid gosu hermes /opt/hermes/.venv/bin/hermes dashboard --no-open \
+      --host "${HERMES_DASHBOARD_HOST}" --port "${HERMES_DASHBOARD_PORT}" \
       >> "${DASHBOARD_LOG}" 2>&1 < /dev/null &
   else
     setsid /opt/hermes/.venv/bin/hermes dashboard --no-open \
+      --host "${HERMES_DASHBOARD_HOST}" --port "${HERMES_DASHBOARD_PORT}" \
       >> "${DASHBOARD_LOG}" 2>&1 < /dev/null &
   fi
   echo $! > "${DASHBOARD_PID_FILE}"
