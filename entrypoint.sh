@@ -226,7 +226,14 @@ fi
 # If the user previously updated Hermes/WebUI from inside the app, restore those
 # exact runtime refs before serving traffic. Railway redeploys start from the
 # Dockerfile pins again, so without this reconcile the in-app update is lost.
-python3 -m admin.runtime_updates boot-reconcile
+# Important: run reconcile as the hermes user. If root updates the git checkout,
+# later in-app updates fail because git cannot create refs/*.lock files.
+if [ "$(id -u)" = "0" ]; then
+  chown -R hermes:hermes /opt/hermes /opt/hermes-webui "${HERMES_HOME}" /opt/hermes-railway 2>/dev/null || true
+  gosu hermes python3 -m admin.runtime_updates boot-reconcile
+else
+  python3 -m admin.runtime_updates boot-reconcile
+fi
 
 if [ -z "${ADMIN_PASSWORD:-}" ]; then
   if [ -f "${ADMIN_PASSWORD_FILE}" ]; then
