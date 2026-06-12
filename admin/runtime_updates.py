@@ -205,7 +205,8 @@ def _install_webui_deps() -> None:
 
 def _install_agent_deps() -> None:
     _run(["npm", "install", "--prefer-offline", "--no-audit"], cwd=AGENT_REPO, timeout=1800)
-    _run(["npx", "playwright", "install", "--with-deps", "chromium", "--only-shell"], cwd=AGENT_REPO, timeout=1800)
+    # --with-deps requires root (apt-get); system packages are already in the Docker image.
+    _run(["npx", "playwright", "install", "chromium", "--only-shell"], cwd=AGENT_REPO, timeout=1800)
     _run(
         [
             "uv",
