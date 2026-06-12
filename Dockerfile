@@ -3,7 +3,7 @@ FROM ghcr.io/astral-sh/uv:0.11.6-python3.13-trixie
 # Pinned to upstream main (post-v2026.6.5) — matches the in-place `hermes update`
 # applied on the running instance 2026-06-11, so a rebuild doesn't roll it back.
 ARG HERMES_REF=a2d7f538d49c7cc282c25ebcc803c8349cae9cff
-ARG HERMES_WEBUI_REF=v0.51.359
+ARG HERMES_WEBUI_REF=v0.51.366
 
 ENV PYTHONUNBUFFERED=1 \
     PLAYWRIGHT_BROWSERS_PATH=/opt/hermes/.playwright \
