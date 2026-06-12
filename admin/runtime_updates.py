@@ -223,6 +223,48 @@ def _install_agent_deps() -> None:
     )
 
 
+def _version_key(value: str) -> tuple[int, ...] | None:
+    raw = value.strip()
+    if not raw.startswith("v"):
+        return None
+    core = raw[1:].split("-", 1)[0]
+    parts = core.split(".")
+    if not parts or any(not part.isdigit() for part in parts):
+        return None
+    return tuple(int(part) for part in parts)
+
+
+def _is_ancestor(repo: Path, older: str, newer: str) -> bool | None:
+    proc = _git(repo, "merge-base", "--is-ancestor", older, newer, check=False, timeout=300)
+    if proc.returncode == 0:
+        return True
+    if proc.returncode == 1:
+        return False
+    return None
+
+
+def _should_adopt_current_state(repo: Path, current_state: dict[str, Any], desired_state: dict[str, Any]) -> bool:
+    current_sha = str(current_state.get("sha") or "").strip()
+    desired_sha = str(desired_state.get("sha") or "").strip()
+    if current_sha and desired_sha and current_sha != desired_sha:
+        _git(repo, "fetch", "origin", "--quiet", "--tags", "--force", timeout=300)
+        desired_is_ancestor = _is_ancestor(repo, desired_sha, current_sha)
+        if desired_is_ancestor is True:
+            return True
+
+    current_describe = str(current_state.get("describe") or "").strip()
+    desired_describe = str(desired_state.get("describe") or desired_state.get("ref") or "").strip()
+    current_version = _version_key(current_describe)
+    desired_version = _version_key(desired_describe)
+    if current_version and desired_version and current_version > desired_version:
+        return True
+    if desired_version and current_sha and desired_sha and current_sha != desired_sha:
+        hexish = all(ch in '0123456789abcdef' for ch in current_describe.lower()) and 7 <= len(current_describe) <= 40
+        if hexish:
+            return True
+    return False
+
+
 def _sync_repo_to_state(name: str, target: dict[str, Any]) -> bool:
     repo = REPOS[name]
     desired_sha = str(target.get("sha") or "").strip()
@@ -306,15 +348,22 @@ def boot_reconcile() -> dict[str, Any]:
     state = _load_state()
     if not state:
         _write_state(current)
-        return {"ok": True, "changed": [], "initialized": True, "state_path": str(STATE_PATH)}
+        return {"ok": True, "changed": [], "initialized": True, "adopted_current": [], "state_path": str(STATE_PATH)}
 
     raw_repos = state.get("repos")
     desired_repos: dict[str, Any] = raw_repos if isinstance(raw_repos, dict) else {}
     changed: list[str] = []
+    adopted_current: list[str] = []
+    raw_current_repos = current.get("repos")
+    current_repos: dict[str, Any] = raw_current_repos if isinstance(raw_current_repos, dict) else {}
 
     for name in ("agent", "webui"):
         target = desired_repos.get(name)
         if not isinstance(target, dict):
+            continue
+        current_repo_state = current_repos.get(name)
+        if isinstance(current_repo_state, dict) and _should_adopt_current_state(REPOS[name], current_repo_state, target):
+            adopted_current.append(name)
             continue
         if _sync_repo_to_state(name, target):
             changed.append(name)
@@ -324,10 +373,16 @@ def boot_reconcile() -> dict[str, Any]:
     if "webui" in changed:
         _install_webui_deps()
 
-    if changed:
+    if changed or adopted_current:
         _write_state(snapshot_current_state())
 
-    return {"ok": True, "changed": changed, "initialized": False, "state_path": str(STATE_PATH)}
+    return {
+        "ok": True,
+        "changed": changed,
+        "initialized": False,
+        "adopted_current": adopted_current,
+        "state_path": str(STATE_PATH),
+    }
 
 
 def main() -> int:
