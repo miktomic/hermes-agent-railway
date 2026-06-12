@@ -32,8 +32,10 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, RedirectResponse
 from starlette.routing import Mount, Route, WebSocketRoute
 
+from . import feedback_hub_bridge
 from . import proxy as hermes_proxy
 from . import terminal as hermes_terminal
+from . import webhook_proxy as hermes_webhook_proxy
 from .dashboard_proxy import DASHBOARD_MOUNT_PREFIX, build_dashboard_starlette_app
 
 
@@ -73,6 +75,10 @@ routes = [
     WebSocketRoute("/tui/ws/auth/{provider}", hermes_terminal.login_ws),
     WebSocketRoute("/tui/ws/shell", hermes_terminal.shell_ws),
     Mount(DASHBOARD_MOUNT_PREFIX, build_dashboard_starlette_app()),
+    Route("/hooks/feedback-hub/issue-created", feedback_hub_bridge.feedback_hub_issue_created, methods=["POST"]),
+    # Public webhook ingress: bypass WebUI login and proxy directly to the Hermes gateway listener.
+    Route("/webhooks", hermes_webhook_proxy.webhook_http_proxy, methods=hermes_webhook_proxy.PROXY_METHODS),
+    Route("/webhooks/{path:path}", hermes_webhook_proxy.webhook_http_proxy, methods=hermes_webhook_proxy.PROXY_METHODS),
     # Catch-all proxy for everything else (HTTP + WebSocket).
     WebSocketRoute("/{path:path}", hermes_proxy.ws_proxy),
     Route("/{path:path}", hermes_proxy.http_proxy, methods=hermes_proxy.PROXY_METHODS),
